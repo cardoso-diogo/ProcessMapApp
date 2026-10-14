@@ -15,8 +15,7 @@
 
 ## Overview
 
-Process Map Builder is an offline-first editor for layered manufacturing and
-business process maps. It combines process flow, supporting information, and
+Process Map Builder is an offline-first editor for layered manufacturing process maps. It combines process flow, supporting information, and
 export-ready presentation in one interactive canvas.
 
 The application is built with framework-free HTML, CSS, and JavaScript. It can
