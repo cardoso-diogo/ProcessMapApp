@@ -40,6 +40,19 @@ test("Map hit testing identifies layer cells and operations",()=>{
   assert(operationTarget?.type==="operation"&&operationTarget.op===col.op);
 });
 
+test("Viewport context identifies the visible phase, operation and layer",()=>{
+  MODEL=newModel();
+  const firstPhase=newPhase("A","First"),secondPhase=newPhase("B","Second");
+  firstPhase.ops=[newOp("1.1")];secondPhase.ops=[newOp("2.1")];MODEL.phases=[firstPhase,secondPhase];
+  const result=buildDiagram(),col=result.cols[1],row=result.rows.find(candidate=>candidate.L.id==="D");
+  const context=mapContextAt(col.x+col.w/2,row.y+row.h/2,result);
+  assert(context.phase===secondPhase);
+  assert(context.col.op===secondPhase.ops[0]);
+  assert(context.row.L.id==="D");
+  const header=mapContextAt(col.x+col.w/2,result.titleLayout.y+1,result);
+  assert(header.phase===secondPhase&&header.row===null);
+});
+
 test("Multiline title and subtitle expand the title band and remain editable",()=>{
   MODEL=newModel();
   MODEL.meta.title="ASSEMBLY PROCESS MAP\nPilot line";
@@ -190,8 +203,50 @@ test("Project migration supplies new settings",()=>{
   assert(migrated.settings.pdfOrientation==="landscape");
 });
 
+test("Legacy layers gain editable codes and the current schema version",()=>{
+  const raw=newModel();
+  delete raw.schemaVersion;
+  raw.layers.forEach(layer=>delete layer.code);
+  const migrated=normalizeProject(raw);
+  assert(migrated.schemaVersion===PROJECT_SCHEMA_VERSION);
+  assert(migrated.layers.every(layer=>layer.code===layer.id));
+});
+
+test("Custom layer codes render and survive a save/open round trip",()=>{
+  MODEL=newModel();
+  const phase=newPhase("A","Custom layers"),op=newOp("1.1"),layer=newInfoLayer("QA");
+  layer.name={pt:"Qualidade",en:"Quality"};
+  MODEL.layers.splice(MODEL.layers.length-1,0,layer);
+  op.cells[layer.id]="Acceptance record";phase.ops=[op];MODEL.phases=[phase];
+  let result=buildDiagram();
+  let text=result.dl.o.filter(item=>item.t==="t").map(item=>item.s).join(" ");
+  assert(text.includes("QA 1.1.1"));
+  layer.code="QMS";
+  result=buildDiagram();
+  text=result.dl.o.filter(item=>item.t==="t").map(item=>item.s).join(" ");
+  assert(text.includes("QMS 1.1.1")&&!text.includes("QA 1.1.1"));
+  assert(op.cells[layer.id]==="Acceptance record","Renaming a display code must not move cell data");
+  const restored=normalizeProject(JSON.parse(serializeModel(MODEL)));
+  const restoredLayer=restored.layers.find(candidate=>candidate.id===layer.id);
+  assert(restoredLayer?.code==="QMS");
+  assert(restored.phases[0].ops[0].cells[layer.id]==="Acceptance record");
+});
+
+test("Layer codes must be valid and unique",()=>{
+  const raw=newModel();
+  raw.layers[1].code=raw.layers[0].code.toLowerCase();
+  let duplicateRejected=false;
+  try{normalizeProject(raw);}catch(_){duplicateRejected=true;}
+  assert(duplicateRejected,"Layer codes must be unique without regard to case");
+  raw.layers[1].code="invalid code";
+  let invalidRejected=false;
+  try{normalizeProject(raw);}catch(_){invalidRejected=true;}
+  assert(invalidRejected,"Codes containing spaces must be rejected");
+});
+
 test("SPC migration preserves old project data and existing SPC configuration",()=>{
   const raw=newModel();
+  delete raw.schemaVersion;
   raw.layers=raw.layers.filter(l=>l.id!=="SPC");
   const phase=newPhase("A","Legacy"),op=newOp("1.1");
   op.cells.MP="Temperature";phase.ops=[op];raw.phases=[phase];

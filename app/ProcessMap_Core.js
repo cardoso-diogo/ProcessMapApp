@@ -20,11 +20,17 @@ const I18N = {
     decision:"Decisão a seguir a esta operação", decText:"Texto da decisão",
     decYes:"Etiqueta ramo sim", decNo:"Etiqueta ramo não", decBack:"Recuar N operações no ramo 'não'",
     layers:"Camadas de informação", noSel:"Selecione uma operação na árvore à esquerda,<br>ou crie uma fase para começar.",
+    viewing:"A visualizar", mapHeader:"Cabeçalho do mapa", locateSelection:"Localizar seleção",
     width:"Largura da coluna (px)", del:"Eliminar", dup:"Duplicar", up:"Mover para cima", down:"Mover para baixo",
     general:"Geral", layout:"Layout", layersCfg:"Camadas", colW:"Largura de coluna",
     gap:"Espaço entre operações", phaseGap:"Espaço entre fases", labelW:"Largura da faixa de camadas",
     fontBase:"Tamanho de letra (conteúdo)", fontTitle:"Tamanho de letra (títulos)",
-    rowMin:"Altura mínima de linha", margin:"Margem", enabled:"Ativa", name:"Nome",
+    rowMin:"Altura mínima de linha", margin:"Margem", enabled:"Ativa", name:"Nome", layerCode:"Código",
+    addLayer:"+ Camada", newLayer:"Nova camada", deleteLayer:"Eliminar camada",
+    confirmLayerDelete:"Eliminar esta camada e todo o conteúdo associado? Esta ação pode ser desfeita.",
+    invalidLayerCode:"Use 1–16 letras, números, _ ou -; o código deve começar por uma letra ou número.",
+    duplicateLayerCode:"Já existe uma camada com este código.",
+    layerHelp:"O código aparece no mapa; a chave interna permanece estável para proteger os dados existentes.",
     boxColor:"Cor da caixa", labelColor:"Cor da faixa", ops:"operações", items:"itens",
     confirmDel:"Eliminar definitivamente?", saved:"Projeto guardado", exported:"Exportado",
     opsCount:"operações", pagesNote:"px", untitled:"Sem título",
@@ -51,11 +57,17 @@ const I18N = {
     decision:"Decision after this operation", decText:"Decision text",
     decYes:"Yes branch label", decNo:"No branch label", decBack:"Go back N operations on 'no'",
     layers:"Layers of information", noSel:"Select an operation in the tree on the left,<br>or create a phase to start.",
+    viewing:"Viewing", mapHeader:"Map header", locateSelection:"Locate selection",
     width:"Column width (px)", del:"Delete", dup:"Duplicate", up:"Move up", down:"Move down",
     general:"General", layout:"Layout", layersCfg:"Layers", colW:"Column width",
     gap:"Gap between operations", phaseGap:"Gap between phases", labelW:"Layer label strip width",
     fontBase:"Body font size", fontTitle:"Title font size",
-    rowMin:"Minimum row height", margin:"Margin", enabled:"On", name:"Name",
+    rowMin:"Minimum row height", margin:"Margin", enabled:"On", name:"Name", layerCode:"Code",
+    addLayer:"+ Layer", newLayer:"New layer", deleteLayer:"Delete layer",
+    confirmLayerDelete:"Delete this layer and all associated content? This action can be undone.",
+    invalidLayerCode:"Use 1–16 letters, numbers, _ or -; the code must start with a letter or number.",
+    duplicateLayerCode:"Another layer already uses this code.",
+    layerHelp:"The code is shown on the map; the internal key stays stable to protect existing data.",
     boxColor:"Box colour", labelColor:"Strip colour", ops:"operations", items:"items",
     confirmDel:"Delete permanently?", saved:"Project saved", exported:"Exported",
     opsCount:"operations", pagesNote:"px", untitled:"Untitled",
@@ -243,15 +255,17 @@ const SPC_GUIDANCE = {
 };
 
 /* ---------------- model ---------------- */
+const PROJECT_SCHEMA_VERSION = 2;
 let uid = 1; const nid = () => "id" + (uid++) + "_" + Math.floor(performance.now()%100000);
 
 function newModel(){
   return {
+    schemaVersion:PROJECT_SCHEMA_VERSION,
     meta:{ title:"Novo mapa de processos", subtitle:"", theme:"plum" },
     settings:{ colW:210, gap:26, phaseGap:44, labelW:34, margin:16,
                fontBase:7, fontTitle:18, fontPhase:11, rowMin:52, stepH:17, lineH:1.32,
                pdfMode:"single", pdfOrientation:"landscape", pdfTextMode:"vector" },
-    layers: DEFAULT_LAYERS.map(l=>({id:l.id, name:{pt:l.pt,en:l.en}, on:l.on, flow:!!l.flow,
+    layers: DEFAULT_LAYERS.map(l=>({id:l.id, code:l.id, name:{pt:l.pt,en:l.en}, on:l.on, flow:!!l.flow,
                                     box:null, strip:null})),
     phases:[]
   };
@@ -261,6 +275,16 @@ function newOp(num){
   return {id:nid(), num:num||"1.1", title:T("newOp"), steps:[], group1Id:"", group2Id:"",
           inputs:[], outputs:[], scrap:[], width:0,
           decision:null, cells:{}};
+}
+function layerCode(layer){ return String(layer?.code||layer?.id||"L").trim(); }
+function nextLayerCode(){
+  const used=new Set(MODEL.layers.map(layer=>layerCode(layer).toUpperCase()));
+  for(let n=1;n<1000;n++) if(!used.has("L"+n)) return "L"+n;
+  return "L"+Date.now().toString(36).slice(-4).toUpperCase();
+}
+function newInfoLayer(code=nextLayerCode()){
+  return {id:"layer_"+nid(),code,name:{pt:I18N.pt.newLayer,en:I18N.en.newLayer},on:true,flow:false,
+    box:null,strip:null};
 }
 function phaseGroup(phase,id){ return id?(phase.groups||[]).find(group=>group.id===id)||null:null; }
 function operationGroup(phase,op,level){ return phaseGroup(phase,op[level===1?"group1Id":"group2Id"]); }
@@ -518,7 +542,7 @@ function buildDiagram(){
     else{
       h = S.rowMin;
       for(const c of cols){
-        const items = parseCell(c.op.cells[L.id], L.id, c.op.num);
+        const items = parseCell(c.op.cells[L.id], layerCode(L), c.op.num);
         if(!items.length) continue;
         const m = measureCellItems(items, c.w-2*PAD-2, size, lh);
         h = Math.max(h, m.h + 2*PAD + 6);
@@ -574,7 +598,7 @@ function buildDiagram(){
       {fill:r.L.flow?th.flowLane:cl.strip,stroke:gridColor,sw:.7,
         rx:V.labelMode==="code"&&V.family!=="blueprint"?Math.min(6,S.labelW/4):0});
     if(V.labelMode==="code"){
-      dl.text(S.margin+S.labelW/2,r.y+r.h/2+S.fontBase*.42,r.L.id,
+      dl.text(S.margin+S.labelW/2,r.y+r.h/2+S.fontBase*.42,layerCode(r.L),
         {size:S.fontBase*(r.L.flow?1.3:1.05),bold:true,fill:r.L.flow?th.flowLaneTxt:(th.text||"#1a1a1a"),anchor:"middle"});
     }else{
       drawRotLabel(dl,S.margin+S.labelW/2,r.y+r.h/2,r.h-8,S.labelW-3,
@@ -587,7 +611,7 @@ function buildDiagram(){
     if(r.L.flow) return;
     // cells
     for(const c of cols){
-      const items = parseCell(c.op.cells[r.L.id], r.L.id, c.op.num);
+      const items = parseCell(c.op.cells[r.L.id], layerCode(r.L), c.op.num);
       if(!items.length) continue;
       const bx=c.x, by=r.y+PAD, bw=c.w, bh=r.h-2*PAD;
       if(V.cellShadow) dl.rect(bx+2,by+2,bw,bh,{fill:th.shadow||"#00000018",stroke:null,rx:V.cellRadius});
@@ -619,7 +643,7 @@ function buildDiagram(){
   const flowRow = rows.find(r=>r.L.flow);
   if(flowRow) drawFlow(dl, cols, flowRow, S, th, size, lh);
 
-  return {dl,w:totalW,h:totalH,cols,rows,background:V.canvas,
+  return {dl,w:totalW,h:totalH,cols,rows,phaseSpans,background:V.canvas,
     titleLayout:{y:yTitle,h:titleH,subtitleX:hasSubtitle?contentX0+titleRegionW:Infinity}};
 }
 
@@ -691,6 +715,15 @@ function flowLaneHeight(cols,S,size,lh){
 function decisionTargetIndex(currentIndex,back){
   return Math.max(0,currentIndex-Math.max(1,back||1));
 }
+function mapContextAt(x,y,res){
+  if(!res||!res.cols?.length) return {phase:null,col:null,row:null};
+  const col=res.cols.reduce((best,candidate)=>{
+    const distance=Math.abs(x-(candidate.x+candidate.w/2));
+    return !best||distance<best.distance?{candidate,distance}:best;
+  },null)?.candidate||null;
+  const row=res.rows.find(candidate=>y>=candidate.y&&y<=candidate.y+candidate.h)||null;
+  return {phase:col?.ph||null,col,row};
+}
 function mapEditTarget(x,y,res){
   if(!res) return null;
   const S=MODEL.settings;
@@ -712,7 +745,7 @@ function mapEditTarget(x,y,res){
     if(y<boxTop||y>boxTop+met.h) return null;
     return {type:"operation",phase:col.ph,op:col.op,label:T("opTitle")+" + "+T("steps")};
   }
-  return {type:"cell",phase:col.ph,op:col.op,layer:row.L,label:`${row.L.id} · ${row.L.name[LANG]||row.L.name.en}`};
+  return {type:"cell",phase:col.ph,op:col.op,layer:row.L,label:`${layerCode(row.L)} · ${row.L.name[LANG]||row.L.name.en}`};
 }
 
 /* --- draw flow lane --- */
@@ -939,6 +972,9 @@ function normalizeProject(raw){
   if(!raw||typeof raw!=="object"||Array.isArray(raw)) throw new Error(T("invalidProject")+": raiz JSON inválida");
   if(!Array.isArray(raw.phases)||!Array.isArray(raw.layers)) throw new Error(T("invalidProject")+": faltam phases/layers");
   if(raw.phases.length>200||raw.layers.length>50) throw new Error(T("invalidProject")+": demasiadas fases/camadas");
+  const sourceSchema=raw.schemaVersion===undefined?1:raw.schemaVersion;
+  if(!Number.isInteger(sourceSchema)||sourceSchema<1||sourceSchema>PROJECT_SCHEMA_VERSION)
+    throw new Error(T("invalidProject")+": versão de formato não suportada");
   const str=(v,path,max=10000)=>{
     if(v===undefined||v===null) return "";
     if(typeof v!=="string") throw new Error(`${T("invalidProject")}: ${path} deve ser texto`);
@@ -969,30 +1005,37 @@ function normalizeProject(raw){
   base.settings.pdfMode=["single","a4","a3"].includes(settings.pdfMode)?settings.pdfMode:"single";
   base.settings.pdfOrientation=["portrait","landscape"].includes(settings.pdfOrientation)?settings.pdfOrientation:"landscape";
   base.settings.pdfTextMode=["vector","unicode"].includes(settings.pdfTextMode)?settings.pdfTextMode:"vector";
-  const layerIds=new Set();
+  const layerIds=new Set(),layerCodes=new Set();
   base.layers=raw.layers.map((l,i)=>{
     if(!l||typeof l!=="object"||Array.isArray(l)) throw new Error(`${T("invalidProject")}: layers[${i}] inválida`);
-    const id=str(l.id,`layers[${i}].id`,20);
+    const id=str(l.id,`layers[${i}].id`,100);
     if(!id||layerIds.has(id)) throw new Error(`${T("invalidProject")}: ID de camada vazio ou duplicado`);
     layerIds.add(id);
     const fallback=DEFAULT_LAYERS.find(x=>x.id===id);
+    const code=(str(l.code,`layers[${i}].code`,16)||(fallback?.id||id)).toUpperCase();
+    if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,15}$/.test(code))
+      throw new Error(`${T("invalidProject")}: ${T("invalidLayerCode")}`);
+    const codeKey=code.toUpperCase();
+    if(layerCodes.has(codeKey)) throw new Error(`${T("invalidProject")}: ${T("duplicateLayerCode")}`);
+    layerCodes.add(codeKey);
     const name=l.name&&typeof l.name==="object"?l.name:{};
     const color=(v,path)=>{
       if(v===undefined||v===null||v==="") return null;
       if(typeof v!=="string"||!/^#[0-9a-f]{6}$/i.test(v)) throw new Error(`${T("invalidProject")}: ${path} inválida`);
       return v;
     };
-    return {id,name:{pt:str(name.pt,`layers[${i}].name.pt`,200)||(fallback?.pt||id),
-      en:str(name.en,`layers[${i}].name.en`,200)||(fallback?.en||id)},on:l.on!==false,flow:!!l.flow,
+    return {id,code,name:{pt:str(name.pt,`layers[${i}].name.pt`,200)||(fallback?.pt||code),
+      en:str(name.en,`layers[${i}].name.en`,200)||(fallback?.en||code)},on:l.on!==false,flow:!!l.flow,
       box:color(l.box,`layers[${i}].box`),strip:color(l.strip,`layers[${i}].strip`)};
   });
-  if(!base.layers.some(l=>l.flow)) throw new Error(T("invalidProject")+": falta a camada de fluxo");
-  if(!layerIds.has("SPC")){
+  if(base.layers.filter(l=>l.flow).length!==1) throw new Error(T("invalidProject")+": deve existir uma camada de fluxo");
+  if(sourceSchema<2&&!layerIds.has("SPC")){
     const spc=newModel().layers.find(l=>l.id==="SPC");
     const monitoringIndex=base.layers.findIndex(l=>l.id==="CMS");
     base.layers.splice(monitoringIndex<0?base.layers.length:monitoringIndex+1,0,spc);
     layerIds.add("SPC");
   }
+  base.schemaVersion=PROJECT_SCHEMA_VERSION;
   let opCount=0;
   base.phases=raw.phases.map((p,pi)=>{
     if(!p||typeof p!=="object"||Array.isArray(p)||!Array.isArray(p.ops))

@@ -34,8 +34,9 @@ server is required.
   subgroups.
 - Define **inputs and outputs per operation** or once for an entire group or
   subgroup. Shared I/O is drawn outside the group boundary.
-- Capture requirements, software, equipment, input and process parameters,
-  defects, monitoring, SPC, and other configurable information layers.
+- Start with requirements, software, equipment, parameters, defects, monitoring,
+  and SPC, then create, rename, reorder, hide, or remove information layers to
+  fit the process.
 - Add process steps, decisions, scrap flows, multiline operation titles, and
   multiline flow labels.
 - Switch between English and Portuguese interfaces.
@@ -43,7 +44,7 @@ server is required.
   layer visibility, and layer order.
 - Edit directly from the inspector or by double-clicking elements on the map.
 - Zoom, pan, fit the drawing to the viewport, and navigate large maps with the
-  minimap.
+  minimap and persistent phase/operation/layer context bar.
 - Undo and redo up to 80 editing states, with automatic local recovery.
 - Export to **SVG**, **PNG**, or **PDF**, including single-page and tiled A4/A3
   PDF layouts.
@@ -74,8 +75,8 @@ which is already present on most current Windows 10 and Windows 11 systems.
 3. Add a phase, then add operations from the structure panel on the left.
 4. Select an operation and enter its flow, I/O, grouping, and information-layer
    details in the inspector on the right.
-5. Use the settings panel to choose the active layers, theme, map dimensions,
-   and PDF options.
+5. Use the settings panel to create or configure layers and choose the theme,
+   map dimensions, and PDF options.
 6. Select **Save project** to keep an editable `.json` copy.
 7. Export the finished map as SVG, PNG, or PDF.
 
@@ -101,7 +102,8 @@ can be combined.
 ## Files, recovery, and exports
 
 - **Project files** are human-readable JSON documents containing the editable
-  map model and presentation settings.
+  map model and presentation settings. A schema version and migration layer
+  keep older project files compatible as the application evolves.
 - **Automatic recovery** stores the latest working state in the browser or
   desktop webview's local storage. When an unsaved state is found after a
   restart, the application offers to restore it.
@@ -202,8 +204,8 @@ node --check app/ProcessMap_Tests.js
 ```
 
 The regression suite covers project normalization, save behavior, long-label
-wrapping, grouped and ungrouped I/O, legacy project migration, diagram rendering,
-SVG escaping, PDF generation, themes, and SPC content.
+wrapping, grouped and ungrouped I/O, legacy project migration, custom layer
+codes, diagram rendering, SVG escaping, PDF generation, themes, and SPC content.
 
 ## Automated publishing
 
