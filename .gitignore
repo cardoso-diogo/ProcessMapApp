@@ -1,0 +1,12 @@
+/src-tauri/target/
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Process maps can contain confidential operational data. Keep local maps out
+# of version control unless they are deliberately placed under examples/.
+/*.json

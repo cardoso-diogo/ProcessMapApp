@@ -1,0 +1,41 @@
+name: Build Windows desktop app
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Tauri CLI
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: src-tauri
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: process-map-builder-windows
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/process-map-builder.exe
+            src-tauri/target/release/bundle/nsis/*.exe

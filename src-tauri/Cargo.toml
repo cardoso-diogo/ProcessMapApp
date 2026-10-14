@@ -1,0 +1,17 @@
+[package]
+name = "process-map-builder"
+version = "1.1.0"
+description = "Offline process map authoring and export tool"
+authors = ["Process Map Builder contributors"]
+edition = "2021"
+
+[lib]
+name = "process_map_builder_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+rfd = "0.15"
+tauri = { version = "2", features = [] }

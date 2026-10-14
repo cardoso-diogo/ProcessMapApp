@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Process Map Builder</title>
+<link rel="stylesheet" href="ProcessMap_Builder.css">
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div id="brand"><span class="dot"></span><span>Process Map Builder</span><small id="brandSub">Diagramas de processo</small></div>
+    <div class="tb-sep"></div>
+    <button class="btn" id="btnNew" data-i18n="new">Novo</button>
+    <button class="btn" id="btnOpen" data-i18n="open">Abrir…</button>
+    <button class="btn" id="btnSave" data-i18n="save">Guardar projeto</button>
+    <button class="btn" id="btnUndo" data-i18n="undo" disabled>Desfazer</button>
+    <button class="btn" id="btnRedo" data-i18n="redo" disabled>Refazer</button>
+    <button class="btn" id="btnExample" data-i18n="example">Exemplo</button>
+    <div class="tb-sep"></div>
+    <button class="btn primary" id="btnSvg">SVG</button>
+    <button class="btn primary" id="btnPdf">PDF</button>
+    <button class="btn primary" id="btnPng">PNG</button>
+    <div class="spacer"></div>
+    <select id="themeSel" title="Tema"></select>
+    <select id="langSel" title="Idioma"><option value="pt">PT</option><option value="en">EN</option></select>
+    <button class="btn" id="btnSettings">⚙</button>
+    <button class="btn" id="btnHelp">?</button>
+  </div>
+
+  <div id="main">
+    <!-- ================= TREE ================= -->
+    <div id="tree">
+      <div class="pane-head"><span data-i18n="structure">Estrutura</span>
+        <div class="spacer"></div>
+        <button class="btn sm" id="btnAddPhase">+ <span data-i18n="phase">Fase</span></button>
+      </div>
+      <div class="pane-body" id="treeBody"></div>
+    </div>
+
+    <!-- ================= CENTER ================= -->
+    <div id="center">
+      <div id="viewbar">
+        <button class="btn sm hidden" id="btnTreeToggle" data-i18n-title="structure" aria-label="Estrutura">☰</button>
+        <button class="btn sm" id="zOut">−</button>
+        <span id="zLbl" class="tiny" style="width:46px;text-align:center">100%</span>
+        <button class="btn sm" id="zIn">+</button>
+        <button class="btn sm" id="zFit" data-i18n="fit">Ajustar</button>
+        <button class="btn sm" id="z100">100%</button>
+        <div class="tb-sep"></div>
+        <span class="tiny" id="dims"></span>
+        <div class="spacer"></div>
+        <span class="tiny" id="stats"></span>
+        <button class="btn sm hidden" id="btnInspectorToggle" data-i18n-title="inspector" aria-label="Inspetor">☷</button>
+      </div>
+      <div id="canvasWrap" tabindex="0" aria-label="Pré-visualização do mapa de processo">
+        <div id="stageOuter"><div id="stage"></div></div>
+        <div id="minimap" aria-label="Minimapa" role="navigation"><div id="miniView"></div></div>
+      </div>
+    </div>
+
+    <!-- ================= INSPECTOR ================= -->
+    <div id="inspector">
+      <div class="pane-head"><span id="inspTitle" data-i18n="inspector">Inspetor</span></div>
+      <div class="pane-body" id="inspBody"></div>
+    </div>
+  </div>
+</div>
+
+<dialog id="dlgSettings">
+  <div class="dlg-h" data-i18n="settings">Definições</div>
+  <div class="dlg-b" id="settingsBody"></div>
+  <div class="dlg-f"><button class="btn" id="setClose" data-i18n="close">Fechar</button></div>
+</dialog>
+
+<dialog id="dlgHelp">
+  <div class="dlg-h" data-i18n="helpTitle">Como usar</div>
+  <div class="dlg-b" id="helpBody"></div>
+  <div class="dlg-f"><button class="btn" id="helpClose" data-i18n="close">Fechar</button></div>
+</dialog>
+
+<input type="file" id="fileInput" accept=".json,application/json" style="display:none">
+<div id="toast"></div>
+
+<script src="ProcessMap_Core.js"></script>
+<script src="ProcessMap_Export.js"></script>
+<script src="ProcessMap_UI.js"></script>
+</body>
+</html>
