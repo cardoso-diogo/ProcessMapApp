@@ -33,7 +33,7 @@ push to `main`. Once Pages is enabled with **GitHub Actions** as its source, the
 browser edition is available at:
 
 ```text
-https://<account>.github.io/process-map-builder/
+https://<account>.github.io/ProcessMapApp/
 ```
 
 This is the simplest distribution option for teammates: they only need the
@@ -50,8 +50,11 @@ cargo install tauri-cli --version "^2" --locked
 cargo tauri build
 ```
 
-Build output is written under `src-tauri/target/release`. A tagged GitHub
-release can also trigger the included Windows build workflow.
+Build output is written under `src-tauri/target/release`. Pushing a version tag
+such as `v1.1.0` triggers the included workflow and publishes a portable Windows
+x64 executable, together with its SHA-256 checksum, on the repository's
+**Releases** page. The executable is currently unsigned, so Windows SmartScreen
+may display a warning when it is first downloaded and opened.
 
 ## Tests
 

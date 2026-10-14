@@ -1,16 +1,15 @@
-name: Build Windows desktop app
+name: Publish portable Windows app
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  build:
+  release:
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -24,18 +23,34 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Install Tauri CLI
-        uses: tauri-apps/tauri-action@v0
+      - name: Build and publish portable executable
+        id: tauri
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: src-tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: Process Map Builder ${{ github.ref_name }}
+          releaseBody: |
+            Portable Windows x64 edition of Process Map Builder.
 
-      - name: Upload executable
-        uses: actions/upload-artifact@v7
-        with:
-          name: process-map-builder-windows
-          if-no-files-found: error
-          path: |
-            src-tauri/target/release/process-map-builder.exe
-            src-tauri/target/release/bundle/nsis/*.exe
+            No installation is required. Download the executable and run it directly.
+            This build is currently unsigned, so Windows SmartScreen may display a warning.
+          releaseDraft: false
+          prerelease: false
+          args: --no-bundle
+          uploadPlainBinary: true
+          releaseAssetNamePattern: Process-Map-Builder_[version]_windows-x64[ext]
+
+      - name: Publish SHA-256 checksum
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          APP_VERSION: ${{ steps.tauri.outputs.appVersion }}
+        run: |
+          $assetName = "Process-Map-Builder_$env:APP_VERSION`_windows-x64.exe"
+          $hash = (Get-FileHash -Algorithm SHA256 "src-tauri/target/release/process-map-builder.exe").Hash.ToLowerInvariant()
+          "$hash  $assetName" | Set-Content -Encoding ascii SHA256SUMS.txt
+          gh release upload "$env:RELEASE_TAG" SHA256SUMS.txt --clobber
