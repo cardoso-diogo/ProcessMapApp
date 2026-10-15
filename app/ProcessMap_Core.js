@@ -447,19 +447,25 @@ class DL{
 }
 /* arrow helpers */
 const AR = 3.2;
-function arrowHead(dl,x,y,dir,color){ // dir: 'r','l','u','d'
+function arrowHead(dl,x,y,dir,color,size=AR){ // dir: 'r','l','u','d'
   let p;
-  if(dir==="r") p=[[x,y],[x-AR*1.6,y-AR],[x-AR*1.6,y+AR]];
-  else if(dir==="l") p=[[x,y],[x+AR*1.6,y-AR],[x+AR*1.6,y+AR]];
-  else if(dir==="d") p=[[x,y],[x-AR,y-AR*1.6],[x+AR,y-AR*1.6]];
-  else p=[[x,y],[x-AR,y+AR*1.6],[x+AR,y+AR*1.6]];
+  if(dir==="r") p=[[x,y],[x-size*1.6,y-size],[x-size*1.6,y+size]];
+  else if(dir==="l") p=[[x,y],[x+size*1.6,y-size],[x+size*1.6,y+size]];
+  else if(dir==="d") p=[[x,y],[x-size,y-size*1.6],[x+size,y-size*1.6]];
+  else p=[[x,y],[x-size,y+size*1.6],[x+size,y+size*1.6]];
   dl.poly(p,{fill:color,stroke:null});
 }
-function arrow(dl,pts,color,sw){
-  for(let i=0;i<pts.length-1;i++) dl.line(pts[i][0],pts[i][1],pts[i+1][0],pts[i+1][1],{stroke:color,sw:sw||0.9});
+function arrow(dl,pts,color,sw,options={}){
+  const width=sw||0.9,headSize=options.headSize||AR;
   const a=pts[pts.length-2], b=pts[pts.length-1];
   let dir = Math.abs(b[0]-a[0])>Math.abs(b[1]-a[1]) ? (b[0]>a[0]?"r":"l") : (b[1]>a[1]?"d":"u");
-  arrowHead(dl,b[0],b[1],dir,color);
+  if(options.halo){
+    for(let i=0;i<pts.length-1;i++)
+      dl.line(pts[i][0],pts[i][1],pts[i+1][0],pts[i+1][1],{stroke:options.halo,sw:width+(options.haloWidth||1.8)});
+    arrowHead(dl,b[0],b[1],dir,options.halo,headSize+1.25);
+  }
+  for(let i=0;i<pts.length-1;i++) dl.line(pts[i][0],pts[i][1],pts[i+1][0],pts[i+1][1],{stroke:color,sw:width});
+  arrowHead(dl,b[0],b[1],dir,color,headSize);
 }
 
 /* ============================================================
@@ -752,6 +758,8 @@ function mapEditTarget(x,y,res){
 function drawFlow(dl, cols, row, S, th, size, lh){
   const V=visualTheme(th);
   const flowArrow=(pts,color=th.connector)=>arrow(dl,pts,color,V.connectorWidth);
+  const operationArrow=pts=>arrow(dl,pts,th.connector,Math.max(1.15,V.connectorWidth),
+    {headSize:4,halo:th.opBody,haloWidth:2});
   const m = flowMetrics(cols,S,size,lh);
   const laneTop = row.y, laneBot = row.y + row.h;
   const boxTop = laneTop + 8 + m.g1H + m.g2H + m.topNodes;
@@ -799,7 +807,7 @@ function drawFlow(dl, cols, row, S, th, size, lh){
     const dec = a.c.op.decision;
     if(dec){
       const cxm = (x0+x1)/2, dw = Math.min(64, (x1-x0)-16), dh = 30;
-      flowArrow([[x0,ya],[cxm-dw/2,ya]],conn);
+      operationArrow([[x0,ya],[cxm-dw/2-1.5,ya]]);
       dl.poly([[cxm,ya-dh/2],[cxm+dw/2,ya],[cxm,ya+dh/2],[cxm-dw/2,ya]],
               {fill:th.decision, stroke:th.decisionStroke, sw:0.7});
       wrapPlain(dec.text||"?", dw-8, size*0.9).slice(0,3).forEach((line,k,arr)=>{
@@ -807,7 +815,7 @@ function drawFlow(dl, cols, row, S, th, size, lh){
         dl.text(cxm-tw/2, ya - (arr.length-1)*size*0.55 + k*size*1.15 + size*0.32,
                 line.map(g=>g.s).join(" "), {size:size*0.9, fill:"#123"});
       });
-      flowArrow([[cxm+dw/2,ya],[x1,ya]],conn);
+      operationArrow([[cxm+dw/2,ya],[x1-1.5,ya]]);
       if(dec.yes) dl.text((cxm+dw/2+x1)/2, ya-3.5, dec.yes, {size:size*0.85, fill:"#123", anchor:"middle"});
       // no-branch: down and back
       const back = Math.max(1, dec.back||1);
@@ -815,17 +823,12 @@ function drawFlow(dl, cols, row, S, th, size, lh){
       const yLoop = laneBot - 6 - m.botNodes - 2;
       flowArrow([[cxm,ya+dh/2],[cxm,yLoop],[tgt.c.x+10,yLoop],[tgt.c.x+10,tgt.bot]],conn);
       if(dec.no) dl.text(cxm+3, ya+dh/2+size*1.3, dec.no, {size:size*0.85, fill:"#123"});
-    } else if(a.c.ph!==b.c.ph || Math.abs(ya-yb)<0.5){
-      flowArrow([[x0,ya],[x1,yb]],conn);
+    } else if(Math.abs(ya-yb)<0.5){
+      operationArrow([[x0,ya],[x1-1.5,yb]]);
     } else {
       const xm=(x0+x1)/2;
-      flowArrow([[x0,ya],[xm,ya],[xm,yb],[x1,yb]],conn);
+      operationArrow([[x0,ya],[xm,ya],[xm,yb],[x1-1.5,yb]]);
     }
-  }
-  /* lead-out arrow only; the first operation starts the flow and needs no lead-in */
-  if(boxes.length){
-    const l=boxes[boxes.length-1];
-    flowArrow([[l.c.x+l.c.w,l.top+l.h/2],[l.c.x+l.c.w+16,l.top+l.h/2]],conn);
   }
 
   /* input / output / scrap nodes */

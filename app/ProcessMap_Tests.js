@@ -103,7 +103,7 @@ test("Save As picker writes the project and reports cancellation",async()=>{
   else delete window.showSaveFilePicker;
 });
 
-test("First operation has no lead-in arrow over the layer strip",()=>{
+test("Operation flow has no arrows before the first or after the final operation",()=>{
   MODEL=newModel();
   const phase=newPhase("A","Flow");
   phase.ops=[newOp("1.1"),newOp("1.2")];
@@ -114,7 +114,11 @@ test("First operation has no lead-in arrow over the layer strip",()=>{
   const leadIn=result.dl.o.some(o=>points(o).some(([x])=>x<first.x-1));
   assert(!leadIn,"first operation must not draw an incoming arrow");
   const leadOut=result.dl.o.some(o=>points(o).some(([x])=>x>last.x+last.w+1));
-  assert(leadOut,"last operation should keep its outgoing arrow");
+  assert(!leadOut,"final operation must not draw an outgoing arrow");
+  const between=result.dl.o.filter(o=>o.t==="l"&&o.s===theme().connector&&o.x1>=first.x+first.w&&o.x2<=last.x);
+  const halo=result.dl.o.filter(o=>o.t==="l"&&o.s===theme().opBody&&o.sw>=3);
+  assert(between.some(line=>line.sw>=1.15),"operation connectors should be visually emphasized");
+  assert(halo.length>0,"operation connectors should include a contrast halo");
 });
 
 test("Operation codes do not have a redundant trailing zero",()=>{
