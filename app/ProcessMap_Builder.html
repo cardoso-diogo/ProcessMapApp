@@ -53,6 +53,16 @@
         <span class="tiny" id="stats"></span>
         <button class="btn sm hidden" id="btnInspectorToggle" data-i18n-title="inspector" aria-label="Inspetor">☷</button>
       </div>
+      <div id="mapContext" aria-live="polite">
+        <span class="context-caption" data-i18n="viewing">A visualizar</span>
+        <button class="context-chip" id="contextPhase" type="button" disabled>—</button>
+        <span class="context-separator">›</span>
+        <button class="context-chip" id="contextOperation" type="button" disabled>—</button>
+        <span class="context-separator">›</span>
+        <button class="context-chip" id="contextLayer" type="button" disabled>—</button>
+        <div class="spacer"></div>
+        <button class="btn sm" id="btnLocateSelection" type="button" data-i18n="locateSelection">Localizar seleção</button>
+      </div>
       <div id="canvasWrap" tabindex="0" aria-label="Pré-visualização do mapa de processo">
         <div id="stageOuter"><div id="stage"></div></div>
         <div id="minimap" aria-label="Minimapa" role="navigation"><div id="miniView"></div></div>

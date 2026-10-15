@@ -38,6 +38,7 @@ function renderDiagramNow(){
   try{
     LAST = buildDiagram();
     $("#stage").innerHTML = toSVG(LAST);
+    renderSelectionMarker();
     $("#dims").textContent = Math.round(LAST.w)+" × "+Math.round(LAST.h)+" px";
     let nops=0, nitems=0;
     MODEL.phases.forEach(p=>p.ops.forEach(o=>{ nops++; Object.values(o.cells||{}).forEach(v=>{ nitems += String(v||"").split("\n").filter(l=>l.trim()&&!/^[\s\-•·]/.test(l)).length; }); }));
@@ -76,6 +77,7 @@ function updateMinimapViewport(){
   view.style.top=Math.max(0,wrap.scrollTop*sy)+"px";
   view.style.width=Math.min(mini.clientWidth,wrap.clientWidth*sx)+"px";
   view.style.height=Math.min(mini.clientHeight,wrap.clientHeight*sy)+"px";
+  updateMapContext();
 }
 function fitZoom(){
   if(!LAST) return;
@@ -85,15 +87,79 @@ function fitZoom(){
   applyZoom();
 }
 
+/* ---------- map-aware navigation ---------- */
+let VIEW_CONTEXT={phase:null,col:null,row:null};
+function setContextChip(id,text,target){
+  const button=$(id);
+  button.textContent=text||"—";
+  button.disabled=!target;
+  button.classList.toggle("current",!!target);
+  button.title=text||"";
+}
+function updateMapContext(){
+  const wrap=$("#canvasWrap"),stage=$("#stage");
+  if(!LAST||!wrap||!stage||!LAST.cols.length){
+    VIEW_CONTEXT={phase:null,col:null,row:null};
+    setContextChip("#contextPhase","—",null);
+    setContextChip("#contextOperation","—",null);
+    setContextChip("#contextLayer",T("mapHeader"),null);
+    return;
+  }
+  const wrapRect=wrap.getBoundingClientRect(),stageRect=stage.getBoundingClientRect();
+  const x=Math.max(0,Math.min(LAST.w,(wrapRect.left+wrap.clientWidth/2-stageRect.left)/ZOOM));
+  const y=Math.max(0,Math.min(LAST.h,(wrapRect.top+wrap.clientHeight/2-stageRect.top)/ZOOM));
+  VIEW_CONTEXT=mapContextAt(x,y,LAST);
+  const {phase,col,row}=VIEW_CONTEXT;
+  setContextChip("#contextPhase",phase?`${phase.code} · ${phase.name}`:"—",phase);
+  setContextChip("#contextOperation",col?`OP ${phase.code}_${col.op.num} · ${col.op.title||"—"}`:"—",col);
+  setContextChip("#contextLayer",row?`${layerCode(row.L)} · ${row.L.name[LANG]||row.L.name.en}`:T("mapHeader"),row);
+}
+function scrollMapToPoint(mapX,mapY){
+  if(!LAST) return;
+  const wrap=$("#canvasWrap"),stage=$("#stage"),wrapRect=wrap.getBoundingClientRect(),stageRect=stage.getBoundingClientRect();
+  const left=mapX===null?wrap.scrollLeft:wrap.scrollLeft+stageRect.left+mapX*ZOOM-(wrapRect.left+wrap.clientWidth/2);
+  const top=mapY===null?wrap.scrollTop:wrap.scrollTop+stageRect.top+mapY*ZOOM-(wrapRect.top+wrap.clientHeight/2);
+  wrap.scrollTo({left:Math.max(0,left),top:Math.max(0,top),behavior:"smooth"});
+}
+function revealPhase(phase){
+  if(!LAST||!phase) return;
+  const span=LAST.phaseSpans.find(candidate=>candidate.ph.id===phase.id);
+  if(span&&span.first<=span.last) scrollMapToPoint((span.x0+span.x1)/2,null);
+}
+function revealOperation(phase,op){
+  if(!LAST||!phase||!op) return;
+  const col=LAST.cols.find(candidate=>candidate.ph.id===phase.id&&candidate.op.id===op.id);
+  const flowRow=LAST.rows.find(candidate=>candidate.L.flow);
+  if(col) scrollMapToPoint(col.x+col.w/2,flowRow?flowRow.y+flowRow.h/2:null);
+}
+function revealSelection(){
+  if(!SEL) return;
+  const phase=findPhase(SEL.phaseId);
+  const operation=SEL.opId?findOp(SEL.phaseId,SEL.opId):null;
+  if(operation) revealOperation(phase,operation); else revealPhase(phase);
+}
+function renderSelectionMarker(){
+  const stage=$("#stage");
+  stage?.querySelector(".map-selection-marker")?.remove();
+  if(!stage||!LAST||!SEL?.opId||!LAST.rows.length) return;
+  const col=LAST.cols.find(candidate=>candidate.ph.id===SEL.phaseId&&candidate.op.id===SEL.opId);
+  if(!col) return;
+  const first=LAST.rows[0],last=LAST.rows[LAST.rows.length-1];
+  stage.appendChild(el("div",{class:"map-selection-marker",style:
+    `left:${col.x-3}px;top:${first.y}px;width:${col.w+6}px;height:${last.y+last.h-first.y}px`}));
+}
+
 /* ---------- tree ---------- */
 function renderTree(){
   const b=$("#treeBody"); b.innerHTML="";
+  const locate=$("#btnLocateSelection"); if(locate) locate.disabled=!SEL;
   if(!MODEL.phases.length){
     b.appendChild(el("div",{class:"empty",html:T("noSel")}));
+    renderSelectionMarker();
     return;
   }
   MODEL.phases.forEach((ph,pi)=>{
-    const head = el("div",{class:"phase-head", onclick:()=>{ SEL={phaseId:ph.id}; renderInspector(); renderTree(); }},
+    const head = el("div",{class:"phase-head", onclick:()=>{ SEL={phaseId:ph.id}; renderInspector(); renderTree(); revealPhase(ph); }},
       el("span",{class:"code"},ph.code),
       el("span",{class:"nm"},ph.name),
       el("button",{class:"btn sm icon", title:T("up"), onclick:e=>{e.stopPropagation(); move(MODEL.phases,pi,-1); renderAll();}},"↑"),
@@ -102,7 +168,7 @@ function renderTree(){
     const box = el("div",{class:"phase"}, head);
     ph.ops.forEach((op,oi)=>{
       const sel = SEL&&SEL.opId===op.id;
-      box.appendChild(el("div",{class:"op"+(sel?" sel":""), onclick:()=>{ SEL={phaseId:ph.id,opId:op.id}; renderTree(); renderInspector(); }},
+      box.appendChild(el("div",{class:"op"+(sel?" sel":""), onclick:()=>{ SEL={phaseId:ph.id,opId:op.id}; renderTree(); renderInspector(); revealOperation(ph,op); }},
         el("span",{class:"num"},op.num),
         el("span",{class:"nm"},op.title||"—"),
         el("button",{class:"btn sm icon",onclick:e=>{e.stopPropagation(); move(ph.ops,oi,-1); renderAll();}},"↑"),
@@ -114,6 +180,7 @@ function renderTree(){
     ));
     b.appendChild(box);
   });
+  renderSelectionMarker();
 }
 function move(arr,i,d){ const j=i+d; if(j<0||j>=arr.length) return; const t=arr[i]; arr[i]=arr[j]; arr[j]=t; }
 
@@ -234,17 +301,17 @@ function renderInspector(){
   b.appendChild(el("div",{style:"margin:14px 2px 6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px"},T("layers")));
   MODEL.layers.filter(l=>!l.flow).forEach(L=>{
     const raw = op.cells[L.id]||"";
-    const n = parseCell(raw,L.id,op.num).length;
+    const n = parseCell(raw,layerCode(L),op.num).length;
     const open = !!raw;
     const cols = layerColors(L);
     b.appendChild(el("div",{class:"sec"+(open?" open":""), id:"sec_"+L.id},
       el("h4",{onclick:e=>e.currentTarget.parentNode.classList.toggle("open"), style:L.on?"":"opacity:.45"},
         el("span",{class:"swatch",style:"background:"+cols.box}),
-        el("b",{},L.id), el("span",{},L.name[LANG]),
+        el("b",{},layerCode(L)), el("span",{},L.name[LANG]),
         el("span",{class:"cnt"}, n?String(n):"")),
       el("div",{class:"body"},
-        area(raw, v=>{ op.cells[L.id]=v; renderDiagram(); updateCount(L.id,op); }, Math.max(3,Math.min(12,raw.split("\n").length+1)),
-             L.id+" "+op.num+".1 …"),
+        area(raw, v=>{ op.cells[L.id]=v; renderDiagram(); updateCount(L,op); }, Math.max(3,Math.min(12,raw.split("\n").length+1)),
+             layerCode(L)+" "+op.num+".1 …"),
         el("div",{class:"help"}, T("autoCode")+" "+T("contHelp")),
         L.id==="SPC"?el("div",{},
           el("div",{class:"help"},SPC_GUIDANCE[LANG].help),
@@ -256,9 +323,9 @@ function renderInspector(){
       )));
   });
 }
-function updateCount(lid,op){
-  const s=document.querySelector("#sec_"+lid+" .cnt");
-  if(s) s.textContent = String(parseCell(op.cells[lid],lid,op.num).length||"");
+function updateCount(layer,op){
+  const s=document.querySelector("#sec_"+layer.id+" .cnt");
+  if(s) s.textContent = String(parseCell(op.cells[layer.id],layerCode(layer),op.num).length||"");
 }
 
 /* ---------- direct map editing ---------- */
@@ -314,6 +381,22 @@ function openMapEditor(target,clientX,clientY){
 }
 
 /* ---------- settings ---------- */
+function setLayerDisplayCode(layer,value,input){
+  const previous=layerCode(layer),next=String(value||"").trim().toUpperCase();
+  if(!/^[A-Z0-9][A-Z0-9_-]{0,15}$/.test(next)){
+    alert(T("invalidLayerCode"));input.value=previous;return;
+  }
+  if(MODEL.layers.some(other=>other!==layer&&layerCode(other).toUpperCase()===next)){
+    alert(T("duplicateLayerCode"));input.value=previous;return;
+  }
+  layer.code=next;input.value=next;renderInspector();renderDiagram();
+}
+function deleteInformationLayer(layer){
+  if(layer.flow||!confirm(T("confirmLayerDelete"))) return;
+  MODEL.layers=MODEL.layers.filter(candidate=>candidate!==layer);
+  MODEL.phases.forEach(phase=>phase.ops.forEach(op=>delete op.cells[layer.id]));
+  renderSettings();renderInspector();renderDiagram();
+}
 function renderSettings(){
   const b=$("#settingsBody"); b.innerHTML="";
   const S=MODEL.settings;
@@ -341,23 +424,31 @@ function renderSettings(){
     g(T("pdfTextMode"),choice(S.pdfTextMode,[["vector",T("pdfVectorText")],["unicode",T("pdfUnicodeText")]],v=>{S.pdfTextMode=v;scheduleCheckpoint();}))
   ));
   b.appendChild(el("h3",{style:"margin:18px 0 8px;font-size:13px"},T("layersCfg")));
+  b.appendChild(el("div",{class:"help",style:"margin-bottom:9px"},T("layerHelp")));
   const tb=el("tbody");
   MODEL.layers.forEach((L,i)=>{
     const c=layerColors(L);
+    const codeInput=el("input",{type:"text",value:layerCode(L),maxlength:"16","aria-label":T("layerCode"),
+      onchange:e=>setLayerDisplayCode(L,e.target.value,e.target),style:"min-width:72px;width:86px;text-transform:uppercase"});
     tb.appendChild(el("tr",{},
       el("td",{}, el("input",{type:"checkbox", ...(L.on?{checked:"checked"}:{}), onchange:e=>{L.on=e.target.checked;renderDiagram();renderInspector();}})),
-      el("td",{}, el("b",{},L.id)),
+      el("td",{}, codeInput),
       el("td",{}, el("input",{type:"text",value:L.name[LANG],oninput:e=>{L.name[LANG]=e.target.value;renderDiagram();}})),
       el("td",{}, el("input",{type:"color",value:toHex(c.box),oninput:e=>{L.box=e.target.value;renderDiagram();},style:"width:44px;padding:0;height:26px"})),
       el("td",{}, el("input",{type:"color",value:toHex(c.strip),oninput:e=>{L.strip=e.target.value;renderDiagram();},style:"width:44px;padding:0;height:26px"})),
       el("td",{}, el("button",{class:"btn sm",onclick:()=>{move(MODEL.layers,i,-1);renderSettings();renderDiagram();}},"↑"),
                   el("button",{class:"btn sm",onclick:()=>{move(MODEL.layers,i,1);renderSettings();renderDiagram();}},"↓"),
-                  el("button",{class:"btn sm",onclick:()=>{L.box=null;L.strip=null;renderSettings();renderDiagram();}},"⟲"))
+                  el("button",{class:"btn sm",title:"Reset colours",onclick:()=>{L.box=null;L.strip=null;renderSettings();renderDiagram();}},"⟲"),
+                  !L.flow?el("button",{class:"btn sm danger",title:T("deleteLayer"),onclick:()=>deleteInformationLayer(L)},"×"):null)
     ));
   });
   b.appendChild(el("table",{class:"grid"},
-    el("thead",{},el("tr",{},el("th",{},T("enabled")),el("th",{},"ID"),el("th",{},T("name")),
+    el("thead",{},el("tr",{},el("th",{},T("enabled")),el("th",{},T("layerCode")),el("th",{},T("name")),
       el("th",{},T("boxColor")),el("th",{},T("labelColor")),el("th",{},""))), tb));
+  b.appendChild(el("button",{class:"btn sm",type:"button",disabled:MODEL.layers.length>=50?"disabled":null,
+    style:"margin-top:9px",onclick:()=>{
+      const layer=newInfoLayer();MODEL.layers.push(layer);renderSettings();renderInspector();renderDiagram();
+    }},T("addLayer")));
 }
 function toHex(c){ if(/^#[0-9a-f]{6}$/i.test(c)) return c; const d=document.createElement("div"); d.style.color=c; document.body.appendChild(d);
   const m=getComputedStyle(d).color.match(/\d+/g); d.remove();
@@ -476,6 +567,16 @@ function initUI(){
     wrap.scrollTop=((e.clientY-r.top)/r.height)*LAST.h*ZOOM-wrap.clientHeight/2;
     updateMinimapViewport();
   });
+  $("#contextPhase").onclick=()=>revealPhase(VIEW_CONTEXT.phase);
+  $("#contextOperation").onclick=()=>{
+    if(!VIEW_CONTEXT.col) return;
+    SEL={phaseId:VIEW_CONTEXT.col.ph.id,opId:VIEW_CONTEXT.col.op.id};
+    renderTree();renderInspector();revealOperation(VIEW_CONTEXT.col.ph,VIEW_CONTEXT.col.op);
+  };
+  $("#contextLayer").onclick=()=>{
+    if(VIEW_CONTEXT.row) scrollMapToPoint(null,VIEW_CONTEXT.row.y+VIEW_CONTEXT.row.h/2);
+  };
+  $("#btnLocateSelection").onclick=revealSelection;
   document.addEventListener("keydown",e=>{
     if(e.code==="Space"&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)){space=true;e.preventDefault();}
     if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==="z"){e.preventDefault();$("#btnUndo").click();}
@@ -499,7 +600,7 @@ pt:`<h3>Fluxo de trabalho</h3>
 <ol>
 <li><b>Fases</b> — crie as grandes etapas do processo (A, B, C…) no painel esquerdo. Cada fase ocupa um bloco de colunas no mapa.</li>
 <li><b>Operações</b> — dentro de cada fase adicione as operações. Cada operação é <u>uma coluna</u> do mapa e recebe um número (ex.: <code>2.1</code>).</li>
-<li><b>Camadas de informação</b> — no inspetor à direita, preencha as caixas de cada camada (Requisitos, Software, Equipamento, Parâmetros de entrada/processo, Defeitos, Monitorização…). <b>Uma linha = um item</b>; o código (<code>RQ 2.1.1</code>) é gerado automaticamente.</li>
+<li><b>Camadas de informação</b> — no inspetor à direita, preencha as caixas de cada camada. Em ⚙ pode criar e eliminar camadas, mudar o respetivo código e nome, reordená-las ou ocultá-las. <b>Uma linha = um item</b>; o código (<code>RQ 2.1.1</code>) é gerado automaticamente.</li>
 <li>Linhas começadas por <code>-</code> ou por espaço <b>continuam o item anterior</b> (sub-detalhe sem código novo).</li>
 <li><b>Fluxo do processo</b> — passos, agrupamentos (dois níveis), entradas/saídas, refugo e decisões definem-se nos campos da operação.</li>
 <li>Quando várias operações pertencem ao mesmo grupo ou subgrupo, podem ser definidas <b>entradas e saídas partilhadas</b>. Estas aparecem uma única vez, acima e fora da caixa do grupo, ligadas ao respetivo limite; as entradas e saídas próprias de cada operação continuam opcionais.</li>
@@ -508,11 +609,12 @@ pt:`<h3>Fluxo de trabalho</h3>
 </ol>
 <h3>Dicas</h3>
 <ul>
+<li>A barra de contexto acima do mapa mostra sempre a fase, operação e camada no centro da vista. Clique num elemento da barra para o recentrar, ou use <b>Localizar seleção</b>. A operação selecionada fica assinalada no mapa.</li>
 <li>Ctrl + roda do rato faz zoom na pré-visualização.</li>
 <li>Arraste com o botão central, ou mantenha Espaço enquanto arrasta, para deslocar o mapa. Clique no minimapa para navegar.</li>
 <li>Faça duplo clique numa caixa, operação, fase ou título para editar diretamente no mapa. Ctrl+Enter confirma; Esc cancela.</li>
 <li>Use Ctrl+Z / Ctrl+Y ou os botões Desfazer / Refazer para percorrer até 80 estados.</li>
-<li>Em ⚙ pode ligar/desligar camadas, reordená-las, mudar cores e ajustar larguras/letras.</li>
+<li>Em ⚙ pode criar, eliminar, ligar/desligar e reordenar camadas, personalizar os códigos, mudar cores e ajustar larguras/letras.</li>
 <li>Os temas Executive, Blueprint e Lean Board alteram também a geometria, grelha, etiquetas, conectores e hierarquia visual do mapa.</li>
 <li>O código da operação no mapa é <code>OP {Fase}_{nº}</code>.</li>
 <li>Se uma coluna precisar de mais espaço, defina uma largura específica no campo "Largura da coluna".</li>
@@ -521,7 +623,7 @@ en:`<h3>Workflow</h3>
 <ol>
 <li><b>Phases</b> — create the main process stages (A, B, C…) in the left panel. Each phase spans a block of columns.</li>
 <li><b>Operations</b> — add operations inside each phase. Each operation is <u>one column</u> and gets a number (e.g. <code>2.1</code>).</li>
-<li><b>Layers of information</b> — in the inspector on the right, fill the boxes for each layer (Requirements, Software, Equipment, Input/Process parameters, Defects, Monitoring…). <b>One line = one item</b>; the code (<code>RQ 2.1.1</code>) is generated automatically.</li>
+<li><b>Layers of information</b> — in the inspector on the right, fill the boxes for each layer. Under ⚙ you can create and delete layers, change their code and name, reorder them, or hide them. <b>One line = one item</b>; the code (<code>RQ 2.1.1</code>) is generated automatically.</li>
 <li>Lines starting with <code>-</code> or a space <b>continue the previous item</b> (sub-detail, no new code).</li>
 <li><b>Process flow</b> — steps, groupings (two levels), inputs/outputs, scrap and decisions are set in the operation fields.</li>
 <li>When several operations belong to the same group or subgroup, you can define <b>shared inputs and outputs</b>. They appear once above and outside the group box, connected to its boundary; each operation can still have its own optional inputs and outputs.</li>
@@ -530,11 +632,12 @@ en:`<h3>Workflow</h3>
 </ol>
 <h3>Tips</h3>
 <ul>
+<li>The context bar above the map always shows the phase, operation and layer at the centre of the viewport. Click an item to recenter it, or use <b>Locate selection</b>. The selected operation is outlined on the map.</li>
 <li>Ctrl + mouse wheel zooms the preview.</li>
 <li>Drag with the middle mouse button, or hold Space while dragging, to pan. Click the minimap to navigate.</li>
 <li>Double-click a cell, operation, phase or title to edit it directly on the map. Ctrl+Enter saves; Esc cancels.</li>
 <li>Use Ctrl+Z / Ctrl+Y or Undo / Redo to browse up to 80 states.</li>
-<li>Under ⚙ you can toggle and reorder layers, change colours and adjust widths/fonts.</li>
+<li>Under ⚙ you can create, delete, toggle and reorder layers, customize codes, change colours and adjust widths/fonts.</li>
 <li>Executive, Blueprint and Lean Board also change the map geometry, grid, labels, connectors and visual hierarchy.</li>
 <li>The operation code on the map is <code>OP {Phase}_{no}</code>.</li>
 <li>If a column needs more room, set a specific width in the "Column width" field.</li>
