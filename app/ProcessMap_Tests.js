@@ -130,6 +130,27 @@ test("Operation codes do not have a redundant trailing zero",()=>{
   assert(!text.includes("OP A_1.1.0"));
 });
 
+test("Long operation titles and steps wrap without changing the default column width",()=>{
+  MODEL=newModel();
+  MODEL.settings.colW=110;
+  const phase=newPhase("A","Flow"),operation=newOp("1.1");
+  operation.title="Prepare and verify a particularly long operation title";
+  operation.steps=["Confirm every required component against the released production record",
+    "UNINTERRUPTEDIDENTIFIERTHATMUSTWRAPSAFELY"];
+  phase.ops=[operation];MODEL.phases=[phase];operation.__phcode=phase.code;
+  const metrics=opBoxHeight(operation,MODEL.settings,MODEL.settings.fontBase,
+    MODEL.settings.fontBase*MODEL.settings.lineH,MODEL.settings.colW);
+  const lineWidth=line=>Math.max(0,...line.map(segment=>segment.x+segment.w));
+  assert(metrics.headLines.length>1,"Long operation titles should wrap");
+  assert(metrics.stepLayouts[0].lines.length>1,"Long operation steps should wrap");
+  assert(metrics.stepLayouts[1].lines.length>1,"Long uninterrupted text should hard-wrap");
+  assert(metrics.headLines.every(line=>lineWidth(line)<=MODEL.settings.colW-12+.01));
+  assert(metrics.stepLayouts.every(step=>step.lines.every(line=>lineWidth(line)<=MODEL.settings.colW-20+.01)));
+  const result=buildDiagram();
+  assert(result.cols[0].w===MODEL.settings.colW,"Text wrapping should preserve the common column width");
+  assert(result.rows.find(row=>row.L.flow).h>MODEL.settings.rowMin,"The flow lane should grow to fit wrapped operations");
+});
+
 test("Flow nodes wrap long input and output labels without truncation",()=>{
   MODEL=newModel();
   const phase=newPhase("A","Flow"),operation=newOp("1.1");

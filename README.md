@@ -37,7 +37,8 @@ server is required.
   and SPC, then create, rename, reorder, hide, or remove information layers to
   fit the process.
 - Add process steps, decisions, scrap flows, multiline operation titles, and
-  multiline flow labels.
+  multiline flow labels. Long operation content wraps while preserving aligned
+  default column widths.
 - Switch between English and Portuguese interfaces.
 - Choose from seven visual themes and customize layout, dimensions, colors,
   layer visibility, and layer order.

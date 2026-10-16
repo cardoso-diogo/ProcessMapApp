@@ -269,7 +269,7 @@ function renderInspector(){
         el("div",{style:"flex:1"}, field(T("outputs"), area(op.outputs.join("\n"),v=>{op.outputs=lines2arr(v);renderDiagram();},2)))
       ),
       field(T("scrap"), area(op.scrap.join("\n"),v=>{op.scrap=lines2arr(v);renderDiagram();},2)),
-      field(T("width"), num(op.width||0, v=>{op.width=v; renderDiagram();},0,900), "0 = auto"),
+      field(T("width"), num(op.width||0, v=>{op.width=v; renderDiagram();},0,900), T("defaultWidthHelp")),
       el("div",{class:"row",style:"margin-top:6px"},
         el("button",{class:"btn sm",onclick:()=>{
           const c=JSON.parse(JSON.stringify(op)); c.id=nid(); c.num=autoNum(ph);
@@ -617,7 +617,7 @@ pt:`<h3>Fluxo de trabalho</h3>
 <li>Em ⚙ pode criar, eliminar, ligar/desligar e reordenar camadas, personalizar os códigos, mudar cores e ajustar larguras/letras.</li>
 <li>Os temas Executive, Blueprint e Lean Board alteram também a geometria, grelha, etiquetas, conectores e hierarquia visual do mapa.</li>
 <li>O código da operação no mapa é <code>OP {Fase}_{nº}</code>.</li>
-<li>Se uma coluna precisar de mais espaço, defina uma largura específica no campo "Largura da coluna".</li>
+<li>Títulos e passos longos ajustam-se em várias linhas e a caixa cresce em altura, mantendo as colunas alinhadas. Se uma coluna precisar realmente de mais espaço, use a largura específica da operação.</li>
 </ul>`,
 en:`<h3>Workflow</h3>
 <ol>
@@ -640,7 +640,7 @@ en:`<h3>Workflow</h3>
 <li>Under ⚙ you can create, delete, toggle and reorder layers, customize codes, change colours and adjust widths/fonts.</li>
 <li>Executive, Blueprint and Lean Board also change the map geometry, grid, labels, connectors and visual hierarchy.</li>
 <li>The operation code on the map is <code>OP {Phase}_{no}</code>.</li>
-<li>If a column needs more room, set a specific width in the "Column width" field.</li>
+<li>Long titles and steps wrap onto multiple lines and the box grows vertically, keeping columns aligned. If one column genuinely needs more room, use its operation-specific width override.</li>
 </ul>`
 };
 

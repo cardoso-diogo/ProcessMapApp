@@ -21,7 +21,8 @@ const I18N = {
     decYes:"Etiqueta ramo sim", decNo:"Etiqueta ramo não", decBack:"Recuar N operações no ramo 'não'",
     layers:"Camadas de informação", noSel:"Selecione uma operação na árvore à esquerda,<br>ou crie uma fase para começar.",
     viewing:"A visualizar", mapHeader:"Cabeçalho do mapa", locateSelection:"Localizar seleção",
-    width:"Largura da coluna (px)", del:"Eliminar", dup:"Duplicar", up:"Mover para cima", down:"Mover para baixo",
+    width:"Largura específica da coluna (px)", defaultWidthHelp:"0 = largura predefinida do projeto",
+    del:"Eliminar", dup:"Duplicar", up:"Mover para cima", down:"Mover para baixo",
     general:"Geral", layout:"Layout", layersCfg:"Camadas", colW:"Largura de coluna",
     gap:"Espaço entre operações", phaseGap:"Espaço entre fases", labelW:"Largura da faixa de camadas",
     fontBase:"Tamanho de letra (conteúdo)", fontTitle:"Tamanho de letra (títulos)",
@@ -58,7 +59,8 @@ const I18N = {
     decYes:"Yes branch label", decNo:"No branch label", decBack:"Go back N operations on 'no'",
     layers:"Layers of information", noSel:"Select an operation in the tree on the left,<br>or create a phase to start.",
     viewing:"Viewing", mapHeader:"Map header", locateSelection:"Locate selection",
-    width:"Column width (px)", del:"Delete", dup:"Duplicate", up:"Move up", down:"Move down",
+    width:"Column width override (px)", defaultWidthHelp:"0 = project default width",
+    del:"Delete", dup:"Duplicate", up:"Move up", down:"Move down",
     general:"General", layout:"Layout", layersCfg:"Layers", colW:"Column width",
     gap:"Gap between operations", phaseGap:"Gap between phases", labelW:"Layer label strip width",
     fontBase:"Body font size", fontTitle:"Title font size",
@@ -394,12 +396,31 @@ function measure(s,size,bold){
   if(v===undefined){ _mc.font = fontStr(size,bold); v = _mc.measureText(s).width; _cache.set(k,v); }
   return v;
 }
+function splitLongWord(word,maxW,size,bold){
+  if(measure(word,size,bold)<=maxW) return [word];
+  const chunks=[];let chunk="";
+  for(const character of word){
+    if(chunk&&measure(chunk+character,size,bold)>maxW){chunks.push(chunk);chunk=character;}
+    else chunk+=character;
+  }
+  if(chunk) chunks.push(chunk);
+  return chunks;
+}
 /* wrap a list of runs [{s,bold}] into lines of merged segments */
 function wrapRuns(runs, maxW, size){
+  maxW=Math.max(1,maxW);
   const lines = []; let cur = []; let cx = 0;
   for(const run of runs){
     const words = String(run.s).split(/\s+/).filter(w=>w.length);
     for(const w of words){
+      const chunks=splitLongWord(w,maxW,size,run.bold);
+      if(chunks.length>1){
+        if(cur.length){lines.push(cur);cur=[];cx=0;}
+        chunks.slice(0,-1).forEach(chunk=>lines.push([{s:chunk,bold:run.bold,x:0,w:measure(chunk,size,run.bold)}]));
+        const last=chunks[chunks.length-1],lastW=measure(last,size,run.bold);
+        cur=[{s:last,bold:run.bold,x:0,w:lastW}];cx=lastW;
+        continue;
+      }
       const ww = measure(w,size,run.bold);
       const sw = cx>0 ? measure(" ",size,run.bold) : 0;
       if(cx>0 && cx+sw+ww > maxW){ lines.push(cur); cur=[{s:w,bold:run.bold,x:0,w:ww}]; cx=ww; }
@@ -707,10 +728,15 @@ function flowMetrics(cols,S,size,lh){
   return {nodeGap,nodes,groups,groupOffsets,topNodes,botNodes,g1H,g2H};
 }
 function opBoxHeight(op,S,size,lh,w){
-  const head = wrapPlain(`OP ${op.__phcode}_${op.num} ${op.title||""}`.trim(), w-8, size*1.05, true);
+  const head = wrapPlain(`OP ${op.__phcode}_${op.num} ${op.title||""}`.trim(), w-12, size*1.05, true);
   const hh = head.length*(size*1.05*1.28) + 6;
-  const steps = (op.steps||[]).length;
-  return {headH:hh, h: hh + steps*(S.stepH+3) + 6, headLines:head};
+  const stepLayouts=(op.steps||[]).map(text=>{
+    const lines=wrapPlain(text,Math.max(12,w-20),size);
+    const lineH=size*1.25;
+    return {lines,lineH,h:Math.max(S.stepH,lines.length*lineH+5)};
+  });
+  const stepsH=stepLayouts.reduce((sum,step)=>sum+step.h+3,0);
+  return {headH:hh,h:hh+stepsH+6,headLines:head,stepLayouts};
 }
 function flowLaneHeight(cols,S,size,lh){
   const m = flowMetrics(cols,S,size,lh);
@@ -788,10 +814,15 @@ function drawFlow(dl, cols, row, S, th, size, lh){
       ty += size*1.05*1.28;
     });
     let sy = boxTop + met.headH + 3;
-    (op.steps||[]).forEach(st=>{
-      dl.rect(bx+5,sy,w-10,S.stepH,{fill:th.opBody,stroke:th.cellStroke||"#2b3745",sw:.6,rx:V.stepRadius});
-      dl.text(bx+w/2,sy+S.stepH/2+size*.36,st,{size,fill:th.text||"#111",anchor:"middle"});
-      sy += S.stepH+3;
+    met.stepLayouts.forEach(step=>{
+      dl.rect(bx+5,sy,w-10,step.h,{fill:th.opBody,stroke:th.cellStroke||"#2b3745",sw:.6,rx:V.stepRadius});
+      let textY=sy+(step.h-step.lines.length*step.lineH)/2+size*.9;
+      step.lines.forEach(line=>{
+        dl.text(bx+w/2,textY,line.map(segment=>segment.s).join(" "),
+          {size,fill:th.text||"#111",anchor:"middle"});
+        textY+=step.lineH;
+      });
+      sy += step.h+3;
     });
     boxes.push({c, top:boxTop, h:met.h, mid:boxTop+met.headH/2, bot:boxTop+met.h});
   });
