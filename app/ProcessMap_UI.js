@@ -162,8 +162,8 @@ function renderTree(){
     const head = el("div",{class:"phase-head", onclick:()=>{ SEL={phaseId:ph.id}; renderInspector(); renderTree(); revealPhase(ph); }},
       el("span",{class:"code"},ph.code),
       el("span",{class:"nm"},ph.name),
-      el("button",{class:"btn sm icon", title:T("up"), onclick:e=>{e.stopPropagation(); if(move(MODEL.phases,pi,-1)){resequencePhaseCodes();renderAll();}}},"↑"),
-      el("button",{class:"btn sm icon", title:T("down"), onclick:e=>{e.stopPropagation(); if(move(MODEL.phases,pi,1)){resequencePhaseCodes();renderAll();}}},"↓")
+      el("button",{class:"btn sm icon", title:T("up"), onclick:e=>{e.stopPropagation(); if(move(MODEL.phases,pi,-1)){resequenceProcessNumbering();renderAll();}}},"↑"),
+      el("button",{class:"btn sm icon", title:T("down"), onclick:e=>{e.stopPropagation(); if(move(MODEL.phases,pi,1)){resequenceProcessNumbering();renderAll();}}},"↓")
     );
     const box = el("div",{class:"phase"}, head);
     ph.ops.forEach((op,oi)=>{
@@ -171,12 +171,12 @@ function renderTree(){
       box.appendChild(el("div",{class:"op"+(sel?" sel":""), onclick:()=>{ SEL={phaseId:ph.id,opId:op.id}; renderTree(); renderInspector(); revealOperation(ph,op); }},
         el("span",{class:"num"},op.num),
         el("span",{class:"nm"},op.title||"—"),
-        el("button",{class:"btn sm icon",onclick:e=>{e.stopPropagation(); move(ph.ops,oi,-1); renderAll();}},"↑"),
-        el("button",{class:"btn sm icon",onclick:e=>{e.stopPropagation(); move(ph.ops,oi,1); renderAll();}},"↓")
+        el("button",{class:"btn sm icon",onclick:e=>{e.stopPropagation(); if(move(ph.ops,oi,-1)){resequenceProcessNumbering();renderAll();}}},"↑"),
+        el("button",{class:"btn sm icon",onclick:e=>{e.stopPropagation(); if(move(ph.ops,oi,1)){resequenceProcessNumbering();renderAll();}}},"↓")
       ));
     });
     box.appendChild(el("div",{style:"padding:6px 8px;display:flex;gap:6px"},
-      el("button",{class:"btn sm",onclick:()=>{ const o=newOp(autoNum(ph)); ph.ops.push(o); SEL={phaseId:ph.id,opId:o.id}; renderAll(); }},T("addOp"))
+      el("button",{class:"btn sm",onclick:()=>{ const o=newOp(); ph.ops.push(o); resequenceProcessNumbering(); SEL={phaseId:ph.id,opId:o.id}; renderAll(); }},T("addOp"))
     ));
     b.appendChild(box);
   });
@@ -224,11 +224,11 @@ function renderInspector(){
       b.appendChild(el("div",{class:"sec open"},
         el("h4",{}, T("phase")),
         el("div",{class:"body"},
-          field(T("phaseCode"), txt(ph.code,v=>{ph.code=v;renderTree();renderDiagram();})),
+          field(T("phaseCode"), el("input",{type:"text",value:ph.code,readonly:"readonly"})),
           field(T("phaseName"), txt(ph.name,v=>{ph.name=v;renderTree();renderDiagram();})),
           el("div",{class:"row"},
-            el("button",{class:"btn sm",onclick:()=>{ const o=newOp(autoNum(ph)); ph.ops.push(o); SEL={phaseId:ph.id,opId:o.id}; renderAll(); }},T("addOp")),
-            el("button",{class:"btn sm",onclick:()=>{ if(confirm(T("confirmDel"))){ MODEL.phases=MODEL.phases.filter(p=>p.id!==ph.id); SEL=null; renderAll(); } }},T("delPhase"))
+            el("button",{class:"btn sm",onclick:()=>{ const o=newOp(); ph.ops.push(o); resequenceProcessNumbering(); SEL={phaseId:ph.id,opId:o.id}; renderAll(); }},T("addOp")),
+            el("button",{class:"btn sm",onclick:()=>{ if(confirm(T("confirmDel"))){ MODEL.phases=MODEL.phases.filter(p=>p.id!==ph.id); resequenceProcessNumbering(); SEL=null; renderAll(); } }},T("delPhase"))
           ))));
     } else {
       b.appendChild(el("div",{class:"empty",html:T("noSel")}));
@@ -252,9 +252,7 @@ function renderInspector(){
     el("h4",{onclick:e=>e.currentTarget.parentNode.classList.toggle("open")}, "OP · " + (op.title||"—")),
     el("div",{class:"body"},
       el("div",{class:"row"},
-        el("div",{style:"width:38%"}, field(T("opNum"), txt(op.num,v=>{
-          op.num=v;$("#inspTitle").textContent=`OP ${ph.code}_${op.num}`;renderTree();renderDiagram();
-        }))),
+        el("div",{style:"width:38%"}, field(T("opNum"), el("input",{type:"text",value:op.num,readonly:"readonly"}))),
         el("div",{style:"flex:1"}, field(T("opTitle"), txt(op.title,v=>{op.title=v;renderTree();renderDiagram();})))
       ),
       field(T("steps"), area(op.steps.join("\n"), v=>{op.steps=lines2arr(v);renderDiagram();},3)),
@@ -272,10 +270,10 @@ function renderInspector(){
       field(T("width"), num(op.width||0, v=>{op.width=v; renderDiagram();},0,900), T("defaultWidthHelp")),
       el("div",{class:"row",style:"margin-top:6px"},
         el("button",{class:"btn sm",onclick:()=>{
-          const c=JSON.parse(JSON.stringify(op)); c.id=nid(); c.num=autoNum(ph);
-          ph.ops.splice(ph.ops.indexOf(op)+1,0,c); SEL={phaseId:ph.id,opId:c.id}; renderAll();
+          const c=JSON.parse(JSON.stringify(op)); c.id=nid();
+          ph.ops.splice(ph.ops.indexOf(op)+1,0,c); resequenceProcessNumbering(); SEL={phaseId:ph.id,opId:c.id}; renderAll();
         }},T("dup")),
-        el("button",{class:"btn sm",onclick:()=>{ if(confirm(T("confirmDel"))){ ph.ops=ph.ops.filter(o=>o.id!==op.id); cleanupPhaseGroups(ph); SEL={phaseId:ph.id}; renderAll(); } }},T("del"))
+        el("button",{class:"btn sm",onclick:()=>{ if(confirm(T("confirmDel"))){ ph.ops=ph.ops.filter(o=>o.id!==op.id); cleanupPhaseGroups(ph); resequenceProcessNumbering(); SEL={phaseId:ph.id}; renderAll(); } }},T("del"))
       )
     )));
 
@@ -485,7 +483,7 @@ function initUI(){
   $("#btnUndo").onclick=()=>{ commitCheckpoint(); restoreHistory(HISTORY_INDEX-1); };
   $("#btnRedo").onclick=()=>{ commitCheckpoint(); restoreHistory(HISTORY_INDEX+1); };
 
-  $("#btnAddPhase").onclick=()=>{ const p=newPhase(nextPhaseCode()); MODEL.phases.push(p); SEL={phaseId:p.id}; renderAll(); };
+  $("#btnAddPhase").onclick=()=>{ const p=newPhase(); MODEL.phases.push(p); resequenceProcessNumbering(); SEL={phaseId:p.id}; renderAll(); };
   $("#btnNew").onclick=()=>{
     if(!confirm(isDirty()?T("unsaved"):T("confirmDel"))) return;
     HISTORY_SUSPENDED=true; MODEL=newModel(); SEL=null; ts.value=MODEL.meta.theme; renderAll(); resetHistory(true); saveRecovery();

@@ -1126,7 +1126,7 @@ function normalizeProject(raw){
     cleanupPhaseGroups(phase);
     return phase;
   });
-  return base;
+  return resequenceProcessNumbering(base);
 }
 const migrate=normalizeProject;
 
@@ -1136,21 +1136,10 @@ function phaseCodeAt(index){
   while(x){x--;c=String.fromCharCode(65+x%26)+c;x=Math.floor(x/26);}
   return c;
 }
-function resequencePhaseCodes(){
-  MODEL.phases.forEach((phase,index)=>{ phase.code=phaseCodeAt(index); });
-}
-function nextPhaseCode(){
-  const used = new Set(MODEL.phases.map(p=>p.code));
-  for(let n=1;n<1000;n++){
-    const c=phaseCodeAt(n-1);
-    if(!used.has(c)) return c;
-  }
-  return String(MODEL.phases.length+1);
-}
-function autoNum(phase){
-  let maxMajor = 0;
-  MODEL.phases.forEach(p=>p.ops.forEach(o=>{ const m=parseInt(String(o.num).split(".")[0],10); if(!isNaN(m)) maxMajor=Math.max(maxMajor,m); }));
-  if(!phase.ops.length) return (maxMajor+1)+".1";
-  const last = phase.ops[phase.ops.length-1].num.split(".");
-  return last[0] + "." + ((parseInt(last[1],10)||0)+1);
+function resequenceProcessNumbering(model=MODEL){
+  model.phases.forEach((phase,phaseIndex)=>{
+    phase.code=phaseCodeAt(phaseIndex);
+    phase.ops.forEach((op,operationIndex)=>{ op.num=`${phaseIndex+1}.${operationIndex+1}`; });
+  });
+  return model;
 }

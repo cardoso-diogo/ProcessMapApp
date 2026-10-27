@@ -12,24 +12,38 @@ test("Cell parsing preserves continuation lines",()=>{
 });
 
 test("Phase codes continue after Z",()=>{
-  const previous=MODEL;
-  MODEL=newModel();
-  MODEL.phases=Array.from({length:26},(_,i)=>newPhase(String.fromCharCode(65+i)));
-  assert(nextPhaseCode()==="AA");
-  MODEL=previous;
+  assert(phaseCodeAt(25)==="Z");
+  assert(phaseCodeAt(26)==="AA");
 });
 
-test("Phase codes follow phase order after reordering",()=>{
+test("Phase and operation numbers follow their current order",()=>{
   const previous=MODEL;
   MODEL=newModel();
   const first=newPhase("A","First"),second=newPhase("B","Second"),third=newPhase("C","Third");
+  first.ops=[newOp("8.4")];
+  second.ops=[newOp("9.7"),newOp("9.3")];
+  third.ops=[newOp("4.2")];
   MODEL.phases=[second,third,first];
-  resequencePhaseCodes();
+  resequenceProcessNumbering();
   assert(MODEL.phases[0]===second&&second.code==="A");
   assert(MODEL.phases[1]===third&&third.code==="B");
   assert(MODEL.phases[2]===first&&first.code==="C");
+  assert(second.ops[0].num==="1.1"&&second.ops[1].num==="1.2");
+  assert(third.ops[0].num==="2.1"&&first.ops[0].num==="3.1");
+  [second.ops[0],second.ops[1]]=[second.ops[1],second.ops[0]];
+  resequenceProcessNumbering();
+  assert(second.ops[0].num==="1.1"&&second.ops[1].num==="1.2","Reordered operations must be renumbered");
   assert(phaseCodeAt(26)==="AA");
   MODEL=previous;
+});
+
+test("Loaded projects are renumbered from their structure",()=>{
+  const raw=newModel(),first=newPhase("X","First"),second=newPhase("Q","Second");
+  first.ops=[newOp("20.8"),newOp("20.2")];second.ops=[newOp("3.9")];raw.phases=[first,second];
+  const normalized=normalizeProject(raw);
+  assert(normalized.phases[0].code==="A"&&normalized.phases[1].code==="B");
+  assert(normalized.phases[0].ops[0].num==="1.1"&&normalized.phases[0].ops[1].num==="1.2");
+  assert(normalized.phases[1].ops[0].num==="2.1");
 });
 
 test("Decision back=1 targets the previous operation",()=>{
