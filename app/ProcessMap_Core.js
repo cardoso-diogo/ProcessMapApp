@@ -1131,11 +1131,18 @@ function normalizeProject(raw){
 const migrate=normalizeProject;
 
 /* Phase and operation numbering */
+function phaseCodeAt(index){
+  let x=index+1,c="";
+  while(x){x--;c=String.fromCharCode(65+x%26)+c;x=Math.floor(x/26);}
+  return c;
+}
+function resequencePhaseCodes(){
+  MODEL.phases.forEach((phase,index)=>{ phase.code=phaseCodeAt(index); });
+}
 function nextPhaseCode(){
   const used = new Set(MODEL.phases.map(p=>p.code));
   for(let n=1;n<1000;n++){
-    let x=n,c="";
-    while(x){x--;c=String.fromCharCode(65+x%26)+c;x=Math.floor(x/26);}
+    const c=phaseCodeAt(n-1);
     if(!used.has(c)) return c;
   }
   return String(MODEL.phases.length+1);

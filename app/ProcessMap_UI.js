@@ -162,8 +162,8 @@ function renderTree(){
     const head = el("div",{class:"phase-head", onclick:()=>{ SEL={phaseId:ph.id}; renderInspector(); renderTree(); revealPhase(ph); }},
       el("span",{class:"code"},ph.code),
       el("span",{class:"nm"},ph.name),
-      el("button",{class:"btn sm icon", title:T("up"), onclick:e=>{e.stopPropagation(); move(MODEL.phases,pi,-1); renderAll();}},"↑"),
-      el("button",{class:"btn sm icon", title:T("down"), onclick:e=>{e.stopPropagation(); move(MODEL.phases,pi,1); renderAll();}},"↓")
+      el("button",{class:"btn sm icon", title:T("up"), onclick:e=>{e.stopPropagation(); if(move(MODEL.phases,pi,-1)){resequencePhaseCodes();renderAll();}}},"↑"),
+      el("button",{class:"btn sm icon", title:T("down"), onclick:e=>{e.stopPropagation(); if(move(MODEL.phases,pi,1)){resequencePhaseCodes();renderAll();}}},"↓")
     );
     const box = el("div",{class:"phase"}, head);
     ph.ops.forEach((op,oi)=>{
@@ -182,7 +182,7 @@ function renderTree(){
   });
   renderSelectionMarker();
 }
-function move(arr,i,d){ const j=i+d; if(j<0||j>=arr.length) return; const t=arr[i]; arr[i]=arr[j]; arr[j]=t; }
+function move(arr,i,d){ const j=i+d; if(j<0||j>=arr.length) return false; const t=arr[i]; arr[i]=arr[j]; arr[j]=t; return true; }
 
 /* ---------- inspector ---------- */
 function field(label,input,help){

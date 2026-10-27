@@ -19,6 +19,19 @@ test("Phase codes continue after Z",()=>{
   MODEL=previous;
 });
 
+test("Phase codes follow phase order after reordering",()=>{
+  const previous=MODEL;
+  MODEL=newModel();
+  const first=newPhase("A","First"),second=newPhase("B","Second"),third=newPhase("C","Third");
+  MODEL.phases=[second,third,first];
+  resequencePhaseCodes();
+  assert(MODEL.phases[0]===second&&second.code==="A");
+  assert(MODEL.phases[1]===third&&third.code==="B");
+  assert(MODEL.phases[2]===first&&first.code==="C");
+  assert(phaseCodeAt(26)==="AA");
+  MODEL=previous;
+});
+
 test("Decision back=1 targets the previous operation",()=>{
   assert(decisionTargetIndex(3,1)===2);
   assert(decisionTargetIndex(3,2)===1);
